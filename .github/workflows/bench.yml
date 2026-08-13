@@ -1,0 +1,65 @@
+name: Benchmark
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 需要历史记录才能 checkout 基线那次提交
+
+      # ---------------------------------------------------------
+      # 关键：基线和当前必须在同一台机器、同一次运行里测。
+      # 拿上周存的数字来比是没有意义的——那是另一台机器。
+      # ---------------------------------------------------------
+      - name: Build current
+        run: |
+          cmake -S . -B build-curr -DCMAKE_BUILD_TYPE=Release -DSOUND_SEG_BENCH=ON
+          cmake --build build-curr -j
+
+      - name: Build baseline (merge base)
+        run: |
+          BASE=$(git merge-base HEAD origin/main)
+          git worktree add /tmp/baseline "$BASE"
+          cmake -S /tmp/baseline -B build-base -DCMAKE_BUILD_TYPE=Release -DSOUND_SEG_BENCH=ON
+          cmake --build build-base -j
+
+      - name: Measure
+        run: |
+          python3 benchmarks/run.py ./build-base/benchmarks/bench \
+                  --iters 5000 --repeat 7 -o baseline.json
+          python3 benchmarks/run.py ./build-curr/benchmarks/bench \
+                  --iters 5000 --repeat 7 -o current.json
+
+      - name: Check for regressions
+        run: |
+          python3 benchmarks/compare.py baseline.json current.json \
+                  --p50-budget 5 --p99-budget 20
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: |
+            baseline.json
+            current.json
+
+  # 复杂度曲线跑得慢，不卡 PR，只在主分支上留档
+  scaling:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSOUND_SEG_BENCH=ON
+          cmake --build build -j
+          ./build/benchmarks/bench_scaling | tee scaling.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scaling-curve
+          path: scaling.txt
