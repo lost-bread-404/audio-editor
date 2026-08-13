@@ -37,9 +37,25 @@ target_include_directories(sound_seg
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_options(sound_seg PRIVATE
-    -Wall -Wextra -Wpedantic
-)
+# Warning flags are compiler-specific. MSVC's driver rejects anything it
+# does not recognise outright (error D8021), so the two families cannot
+# share one list. Define the right list once and reuse it everywhere.
+if(MSVC)
+    set(SS_WARNING_FLAGS /W4)
+else()
+    set(SS_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+endif()
+
+# Sanitizers, coverage and libFuzzer all use GCC/Clang-only syntax.
+# Guard on this rather than on the OS: clang-cl on Windows takes GNU
+# flags, and MSVC is not the only thing that runs on Windows.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
+    set(SS_GNU_STYLE_FLAGS TRUE)
+else()
+    set(SS_GNU_STYLE_FLAGS FALSE)
+endif()
+
+target_compile_options(sound_seg PRIVATE ${SS_WARNING_FLAGS})
 
 set_target_properties(sound_seg PROPERTIES
     VERSION   ${PROJECT_VERSION}     # libsound_seg.so.0.1.0
@@ -48,11 +64,22 @@ set_target_properties(sound_seg PROPERTIES
 )
 
 if(SOUND_SEG_ASAN)
+    if(NOT SS_GNU_STYLE_FLAGS)
+        message(FATAL_ERROR
+                "SOUND_SEG_ASAN requires GCC or Clang, not ${CMAKE_C_COMPILER_ID}")
+    endif()
     target_compile_options(sound_seg PUBLIC -fsanitize=address,undefined -g -O1)
     target_link_options(sound_seg    PUBLIC -fsanitize=address,undefined)
 endif()
 
+# The library itself must carry coverage instrumentation, or libFuzzer
+# sees no feedback from it and degenerates into random input testing.
+# 'fuzzer-no-link' adds the instrumentation without linking libFuzzer's
+# main(); only the fuzz target links that.
 if(SOUND_SEG_FUZZ)
+    if(NOT SS_GNU_STYLE_FLAGS)
+        message(FATAL_ERROR "SOUND_SEG_FUZZ requires Clang")
+    endif()
     target_compile_options(sound_seg PUBLIC
         -fsanitize=fuzzer-no-link,address -fno-omit-frame-pointer -g -O1)
     target_link_options(sound_seg PUBLIC -fsanitize=address)
