@@ -18,25 +18,26 @@ jobs:
   # 1. 矩阵构建：3 个系统 x 2 个编译器，一次 push 全部验证
   # ---------------------------------------------------------------
   build:
-    name: ${{ matrix.os }} / ${{ matrix.cc }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false     # 一个格子挂了，其他格子继续跑完
+      # 用 include 而不是 os x cc 笛卡尔积：Windows 上 -DCMAKE_C_COMPILER
+      # 会被 Visual Studio 生成器忽略，那样的格子名字写着 clang、实际跑
+      # 的是 MSVC，比没有这个格子更糟。这里每一行都明确写出用什么。
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        cc: [gcc, clang]
-        exclude:
-          - os: windows-latest
-            cc: gcc        # Windows 上只用 MSVC 默认工具链
+        include:
+          - {name: "Linux / gcc",     os: ubuntu-latest, cmake_args: "-DCMAKE_C_COMPILER=gcc"}
+          - {name: "Linux / clang",   os: ubuntu-latest, cmake_args: "-DCMAKE_C_COMPILER=clang"}
+          - {name: "macOS / clang",   os: macos-latest,  cmake_args: "-DCMAKE_C_COMPILER=clang"}
+          - {name: "Windows / MSVC",  os: windows-latest, cmake_args: ""}
+          - {name: "Windows / clang-cl", os: windows-latest, cmake_args: "-T ClangCL"}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: >
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
 
       - name: Build
         run: cmake --build build --config Release -j
@@ -78,6 +79,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: cmake -S . -B build -DCMAKE_C_FLAGS="-Werror"
       - run: cmake --build build -j
+      # 同一份代码在 clang 下会报 gcc 不报的警告，反之亦然。两个都要跑。
+      - run: cmake -S . -B build-clang -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS="-Werror"
+      - run: cmake --build build-clang -j
 
   # ---------------------------------------------------------------
   # 4. 安装验证：别人真的能用吗
@@ -134,11 +138,32 @@ jobs:
 
       - name: Collect report
         run: |
+          # --ignore-errors unused: lcov 2.x 把「排除模式没匹配到任何文件」
+          # 从警告升级成了错误。系统头文件本来就没被采集，所以 '/usr/*'
+          # 永远匹配不到。这不是问题，但会让 job 以 25 退出。
+          # --rc branch_coverage=1: 否则分支覆盖率一律显示 "no data found"，
+          # 而分支正是错误处理路径所在的地方。
           lcov --capture --directory build --output-file coverage.info \
-               --ignore-errors mismatch
+               --rc branch_coverage=1 \
+               --ignore-errors mismatch,unused
           lcov --remove coverage.info '/usr/*' '*/tests/*' \
+               --rc branch_coverage=1 \
+               --ignore-errors unused \
                --output-file coverage.info
-          lcov --list coverage.info
+          lcov --list coverage.info --rc branch_coverage=1
+
+      # 棘轮：只许升不许降。数字设在当前水平略下方，
+      # 这样它挡的是「新代码没写测试」，而不是逼你今天补完所有测试。
+      - name: Enforce minimum line coverage
+        run: |
+          MIN=65
+          PCT=$(lcov --summary coverage.info 2>&1 \
+                | awk -F'[ %]' '/lines/ {print int($4)}')
+          echo "line coverage: ${PCT}%  (floor ${MIN}%)"
+          if [ "$PCT" -lt "$MIN" ]; then
+            echo "::error::coverage ${PCT}% is below the ${MIN}% floor"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
