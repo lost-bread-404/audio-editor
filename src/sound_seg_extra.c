@@ -68,8 +68,26 @@ void tr_transfer_ownership(struct ss_ctx *ctx, struct sound_seg *dying)
                         node->parent = heir;
                     }
                 }else{
-                    // transfer ownership to parent
-                    node->parent = dying->parent;
+                    // 'dying' is an alias, so it has no samples of its own
+                    // to give away; 'node' must be re-aimed at whatever
+                    // node actually holds the samples. A single hop is not
+                    // enough -- dying->parent may itself be another alias
+                    // -- so climb until a data-owning node is reached,
+                    // exactly as tr_get_data would.
+                    //
+                    // That owner may still be a node of the track being
+                    // destroyed. That is fine here *only* because destroy
+                    // runs this alias pass over the whole chain before the
+                    // ownership pass: by the time the owning node is
+                    // processed it will see 'node' among its referents and
+                    // promote it to the real owner. Running the two passes
+                    // in the other order would leave 'node' aimed at memory
+                    // that is about to be freed.
+                    struct sound_seg *owner = dying->parent;
+                    while (owner && !owner->has_data) {
+                        owner = owner->parent;
+                    }
+                    node->parent = owner;
                 }
             }
         }

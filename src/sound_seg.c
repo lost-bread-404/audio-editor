@@ -147,14 +147,44 @@ void ss_track_destroy(ss_track *track)
     }
     struct ss_ctx *ctx = owner_of(track);
 
-    ss_track *cur = track;
-    while (cur) {
-        struct sound_seg *next = cur->next;
-        tr_transfer_ownership(ctx, cur); // transfer all children of track to its heir/parent
-        cur = next;
-    }
+    /* Unregister before handing off ownership. Self-referencing inserts
+     * can make one node of this very track alias another node of the
+     * same track; if the registry still listed this track while we
+     * search for a hand-off candidate, that internal alias could be
+     * picked as the new owner -- and then get freed seconds later in
+     * the sweep below, leaving any *other* track that was just pointed
+     * at it dangling. Removing the track first means the search below
+     * only ever sees tracks that will still exist afterward. */
+    tr_registry_remove(ctx, track);
 
-    tr_registry_remove(owner_of(track), track);
+    /* Hand-off runs in two ordered passes over this track's nodes.
+     *
+     * Pass 1 handles the alias nodes: any surviving node that pointed at
+     * one of them is re-aimed at whichever node actually holds the
+     * samples. That target may still belong to this track.
+     *
+     * Pass 2 then handles the data-owning nodes: each one looks for
+     * surviving nodes still pointing at it and promotes one of them to
+     * be the new owner of the buffer.
+     *
+     * The order is what makes it safe. Pass 1 concentrates every
+     * outside reference onto the data-owning nodes, so pass 2 sees all
+     * of them and can move the buffer to a survivor. Doing ownership
+     * first would let pass 1 afterwards re-aim references onto nodes
+     * that the sweep below is about to free.
+     *
+     * The header node is skipped: its union slot holds the context, not
+     * a parent pointer, so it must never be walked as an alias. */
+    for (ss_track *cur = track->next; cur; cur = cur->next) {
+        if (!cur->has_data) {
+            tr_transfer_ownership(ctx, cur);
+        }
+    }
+    for (ss_track *cur = track->next; cur; cur = cur->next) {
+        if (cur->has_data) {
+            tr_transfer_ownership(ctx, cur);
+        }
+    }
 
     while (track){
         struct sound_seg *next = track->next;
