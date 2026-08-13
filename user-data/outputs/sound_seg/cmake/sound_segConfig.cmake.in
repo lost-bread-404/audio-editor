@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+# If the library ever gains external dependencies, they get resolved
+# here, before the targets file is read. Example:
+#   include(CMakeFindDependencyMacro)
+#   find_dependency(Threads REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/sound_segTargets.cmake")
+
+check_required_components(sound_seg)

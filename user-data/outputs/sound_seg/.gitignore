@@ -1,0 +1,21 @@
+build/
+build-*/
+stage/
+
+# fuzzing artifacts
+crash-*
+leak-*
+timeout-*
+oom-*
+minimized-from-*
+corpus/
+
+# benchmark output
+*.json
+!compile_commands.json
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+compile_commands.json

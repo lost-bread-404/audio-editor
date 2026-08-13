@@ -1,0 +1,29 @@
+name: Fuzz
+
+# 模糊测试跑得久，不适合每次 push 都跑。放到每晚一次。
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:        # 也允许手动点按钮触发
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build fuzzer
+        run: |
+          cmake -S . -B build-fuzz -DSOUND_SEG_FUZZ=ON \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-fuzz -j
+
+      - name: Run for 5 minutes
+        run: ./build-fuzz/fuzz/fuzz_track -max_total_time=300 -print_final_stats=1
+
+      # 失败时把导致崩溃的那个输入存下来，方便你本地复现
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: crash-inputs
+          path: crash-*
