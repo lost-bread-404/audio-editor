@@ -98,6 +98,12 @@ void tr_transfer_ownership(struct ss_ctx *ctx, struct sound_seg *dying)
 struct sound_seg *tr_create_original_node(struct sound_seg *prev_seg,
                                           size_t length)
 {
+    /* Refuse a sample count that cannot be turned into a byte count.
+     * Callers are expected to have range-checked already; this is here
+     * so the multiply below can never overflow regardless of caller. */
+    if (length > SIZE_MAX / sizeof(int16_t)) {
+        return NULL;
+    }
     struct sound_seg *new_node = calloc(1, sizeof(struct sound_seg));
     if (!new_node) {
         return NULL;

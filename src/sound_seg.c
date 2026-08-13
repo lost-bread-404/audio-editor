@@ -245,15 +245,31 @@ ss_status ss_track_write(ss_track *track, size_t pos, size_t len,
     }
 
     size_t total = track_len(track);
-    if (pos > total && pos - total > SIZE_MAX - len) {
+    /* Ask whether pos + len wraps, using pos and len themselves. An
+     * earlier version subtracted 'total' from pos first, which shrinks
+     * the left side of the comparison and lets a wrapping request
+     * through whenever the track already holds samples -- pos + len
+     * then wrapped to a small number, the track looked large enough to
+     * need no growth, and the position lookup walked off the end. */
+    if (pos > SIZE_MAX - len) {
         return SS_ERR_OUT_OF_RANGE;      /* pos + len would overflow */
     }
     if (pos + len > total) {
+        /* The check above only asks whether pos + len wraps. That is a
+         * different question from whether the samples it describes could
+         * exist: a length just under the wrap point survives it and still
+         * names more samples than a byte count can address. Validate the
+         * growth itself before handing it to the allocator, or the
+         * sample-count-to-byte-count multiply overflows there instead. */
+        size_t grow = pos + len - total;
+        if (grow > SIZE_MAX / sizeof(int16_t)) {
+            return SS_ERR_OUT_OF_RANGE;
+        }
         struct sound_seg *tail = track;
         while (tail->next) {
             tail = tail->next;
         }
-        if (!tr_create_original_node(tail, pos + len - total)) {
+        if (!tr_create_original_node(tail, grow)) {
             return SS_ERR_NO_MEMORY;
         }
     }
