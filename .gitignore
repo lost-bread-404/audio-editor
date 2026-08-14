@@ -2,13 +2,18 @@ build/
 build-*/
 stage/
 
-# fuzzing artifacts
+# fuzzing artifacts. These patterns are for the throwaway files libFuzzer
+# drops in the working directory; the curated regression inputs under
+# fuzz/regressions/ are the opposite -- they must be version controlled,
+# or a later checkout cannot prove the fixed crashes stay fixed.
 crash-*
 leak-*
 timeout-*
 oom-*
 minimized-from-*
 corpus/
+!fuzz/regressions/
+!fuzz/regressions/**
 
 # benchmark output
 *.json
