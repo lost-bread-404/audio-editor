@@ -7,6 +7,10 @@ on:
 
 jobs:
   benchmark:
+    # 只在 PR 上跑。push 到 main 时 HEAD 就是 origin/main，下面那句
+    # merge-base 算出来的「基线」正是 HEAD 本身——等于拿同一份代码跟
+    # 自己比，任何非零的差都只能是噪声。main 上的记录由 scaling 负责。
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
