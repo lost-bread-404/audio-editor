@@ -48,8 +48,8 @@ bool tr_find_child(struct ss_ctx *ctx, struct sound_seg *parent)
 void tr_transfer_ownership(struct ss_ctx *ctx, struct sound_seg *dying)
 {
     struct sound_seg *heir = NULL;
-    bool is_ancestor = dying->has_data;
- 
+    const bool is_ancestor = dying->has_data;
+
     // find all children of dying and transfer their ownership
     for (size_t i = 0; i < ctx->len; i++) {
         struct sound_seg *node = ctx->headers[i];
@@ -73,6 +73,9 @@ void tr_transfer_ownership(struct ss_ctx *ctx, struct sound_seg *dying)
                 }
             }
         }
+    }
+    if(!is_ancestor) {
+        dying->parent = NULL;
     }
     return;
 }
