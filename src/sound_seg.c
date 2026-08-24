@@ -147,7 +147,10 @@ void ss_track_destroy(ss_track *track)
     }
     struct ss_ctx *ctx = owner_of(track);
 
-    ss_track *cur = track;
+    /* Start at track->next: the header's union slot holds the context,
+     * not a parent or a data pointer, so it must never be handled as an
+     * ordinary node. */
+    ss_track *cur = track->next;
     while (cur) {
         struct sound_seg *next = cur->next;
         tr_transfer_ownership(ctx, cur); // transfer all children of track to its heir/parent
@@ -215,7 +218,11 @@ ss_status ss_track_write(ss_track *track, size_t pos, size_t len,
     }
 
     size_t total = track_len(track);
-    if (pos > total && pos - total > SIZE_MAX - len) {
+    /* Guard the operands of the sum we are about to compute. Stating the
+     * test over 'pos - total' instead shrinks the left-hand side by the
+     * track's existing length, so a wrapping request slips through and
+     * the blind spot widens as the track grows. */
+    if (pos > SIZE_MAX - len) {
         return SS_ERR_OUT_OF_RANGE;      /* pos + len would overflow */
     }
     if (pos + len > total) {
