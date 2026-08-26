@@ -33,6 +33,8 @@ def main():
 
     merged = {"clock_overhead_ns": statistics.median(
                   r["clock_overhead_ns"] for r in runs),
+              "clock_resolution_ns": statistics.median(
+                  r["clock_resolution_ns"] for r in runs),
               "repeat": args.repeat,
               "iters": args.iters,
               "results": []}

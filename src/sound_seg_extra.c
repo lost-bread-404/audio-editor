@@ -130,16 +130,16 @@ int16_t *tr_get_data(struct sound_seg *seg)
 
 void tr_split_one(struct sound_seg *current, int index, int length)
 {
-    struct sound_seg *new_node = calloc(1, sizeof(struct sound_seg));
+    struct sound_seg *new_node = malloc(1 * sizeof(struct sound_seg));
     new_node->len = length;
 
     if ((unsigned long long)length < current->len - (unsigned long long)index) {
-        struct sound_seg *back_node = calloc(1, sizeof(struct sound_seg));
+        struct sound_seg *back_node = malloc(1 * sizeof(struct sound_seg));
         int back_node_index = index + length;
         back_node->len = current->len - back_node_index;
 
         if (current->has_data) {
-            back_node->data = calloc(back_node->len, sizeof(int16_t));
+            back_node->data = malloc(back_node->len * sizeof(int16_t));
             memcpy(back_node->data,
                    current->data + back_node_index,
                    back_node->len * sizeof(int16_t));
@@ -155,14 +155,11 @@ void tr_split_one(struct sound_seg *current, int index, int length)
     }
 
     if (current->has_data) {
-        int16_t *orig = current->data;
-        current->data = calloc(index, sizeof(int16_t));
-        memcpy(current->data, orig, index * sizeof(int16_t));
-
-        new_node->data = calloc(length, sizeof(int16_t));
-        memcpy(new_node->data, orig + index, length * sizeof(int16_t));
+        new_node->data = malloc(length * sizeof(int16_t));
+        memcpy(new_node->data, current->data + index, length * sizeof(int16_t));
         new_node->has_data = 1;
-        free(orig);
+
+        current->data = realloc(current->data, index * sizeof(int16_t));
     } else {
         new_node->parent   = current->parent->next;
         new_node->has_data = 0;

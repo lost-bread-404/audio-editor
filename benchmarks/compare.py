@@ -7,11 +7,15 @@ import argparse
 import json
 import sys
 
-
 def load(path):
     with open(path) as f:
         data = json.load(f)
-    return {r["name"]: r for r in data["results"]}, data.get("clock_overhead_ns", 0)
+    # 判定噪声用 overhead 和 resolution 里更大的那个：
+    # 一个操作要么快到测量成本能盖过它，要么细到时钟分不出来，
+    # 任一条成立，这个数字都不能拿来 gate。
+    floor = max(data.get("clock_overhead_ns", 0),
+                data.get("clock_resolution_ns", 0))
+    return {r["name"]: r for r in data["results"]}, floor
 
 
 def main():

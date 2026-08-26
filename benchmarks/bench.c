@@ -1,3 +1,4 @@
+
 /*
  * Latency benchmark harness for libsound_seg.
  *
@@ -6,7 +7,12 @@
  *
  * Output is JSON on stdout so CI can diff two runs mechanically.
  */
+/* macOS: CLOCK_MONOTONIC 的分辨率是 1 us，比本文件里任何一个操作都粗。
+ * 而且在 Apple 上定义 _POSIX_C_SOURCE 会把 __DARWIN_C_LEVEL 降到
+ * POSIX-only，高分辨率的那几个 clock id 会被头文件藏起来。 */
+#ifndef __APPLE__
 #define _POSIX_C_SOURCE 199309L
+#endif
 
 #include "sound_seg/sound_seg.h"
 
@@ -24,9 +30,27 @@
  * produce negative durations. */
 static double now_ns(void)
 {
+#ifdef __APPLE__
+    return (double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
+#endif
+}
+
+/* 两次连续读时钟之间最小的非零间隔。如果某个操作的耗时不到它的
+ * 几倍，那么所有测量值都是它的整数倍，数字是假的。
+ * overhead 回答"读时钟多贵"，resolution 回答"时钟能分辨多细"。
+ * 两者不同：一个 1 us 分辨率的时钟可以只要 20 ns 就读完。 */
+static double clock_resolution_ns(void)
+{
+    double best = 1e18;
+    for (int i = 0; i < 10000; i++) {
+        double a = now_ns(), b = now_ns();
+        if (b > a && b - a < best) best = b - a;
+    }
+    return best;
 }
 
 static int cmp_double(const void *a, const void *b)
@@ -209,8 +233,10 @@ int main(int argc, char **argv)
         (void)now_ns();
     }
     double clock_ns = (now_ns() - t0) / 1000.0;
+    printf("{\n  \"clock_overhead_ns\": %.1f,\n"
+        "  \"clock_resolution_ns\": %.1f,\n  \"results\": [",
+        clock_ns, clock_resolution_ns());
 
-    printf("{\n  \"clock_overhead_ns\": %.1f,\n  \"results\": [", clock_ns);
     for (size_t i = 0; i < ncases; i++) {
         run_case(&cases[i], warmup, iters, i == 0);
     }

@@ -1,3 +1,5 @@
+
+
 /*
  * Scaling benchmark: how does cost grow with input size?
  *
@@ -5,7 +7,12 @@
  * tells you what happens when a user's input is 100x bigger than
  * anything you tested. That is where libraries actually fail.
  */
+/* macOS: CLOCK_MONOTONIC 的分辨率是 1 us，比本文件里任何一个操作都粗。
+ * 而且在 Apple 上定义 _POSIX_C_SOURCE 会把 __DARWIN_C_LEVEL 降到
+ * POSIX-only，高分辨率的那几个 clock id 会被头文件藏起来。 */
+#ifndef __APPLE__
 #define _POSIX_C_SOURCE 199309L
+#endif
 
 #include "sound_seg/sound_seg.h"
 #include <stdio.h>
@@ -14,9 +21,13 @@
 
 static double now_ns(void)
 {
+#ifdef __APPLE__
+    return (double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
+#endif
 }
 
 static int cmp(const void *a, const void *b)
