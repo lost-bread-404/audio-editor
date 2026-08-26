@@ -9,6 +9,11 @@ timeout-*
 oom-*
 minimized-from-*
 corpus/
+story_template
+build-*.zip
+build-*
+*.json 
+
 
 # benchmark output
 *.json

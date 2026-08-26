@@ -93,6 +93,7 @@ ss_status ss_track_read(ss_track *track, size_t pos, size_t len,
 ss_status ss_track_write(ss_track *track, size_t pos, size_t len,
                          const int16_t *src);
 
+// refuse if the track to be deleted is a parent and has child
 ss_status ss_track_delete(ss_track *track, size_t pos, size_t len);
 
 ss_status ss_track_insert(ss_track *dest, size_t destpos,
